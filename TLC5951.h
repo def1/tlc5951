@@ -2,6 +2,7 @@
 #define tcl5951_h
 
 #include "Arduino.h"
+#include "SPI.h"
 
 class TLC5951
 {
@@ -16,6 +17,7 @@ class TLC5951
 		void setAllDCData(int dcvalue);
 		void updateControl();
 		void update();
+		void setBuffer(bool bit);
 	
 	private:
 		int _gssin;
@@ -32,10 +34,14 @@ class TLC5951
 		byte _brightBlue;
 		byte _dcData[8][3];
 		
-		bool _buffer[288];
-		
 		// [0-7 LED][0-2 RGB]
 		unsigned int _gsData[8][3];
+		
+		// SPI
+		byte _buffer;
+		int _bufferCount;
+		
+		int _debug;
 };
 
 #endif

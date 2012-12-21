@@ -1,12 +1,18 @@
 #include "tlc5951.h"
 #include <SPI.h>
 
+#define bit_set(p,m) ((p) |= (m)) 
+#define bit_clear(p,m) ((p) &= ~(m)) 
+#define bit_write(c,p,m) (c ? bit_set(p,m) : bit_clear(p,m)) 
+
 void TLC5951::init(int gssin, int gssck, int gslat, int xblnk, int gsckrgb) {
 	_gssin = gssin;
 	_gssck = gssck;
 	_gslat = gslat;
 	_xblnk = xblnk;
 	_gsckrgb = gsckrgb;
+	
+	_bufferCount = 0;
 	
 	pinMode(_gssin, OUTPUT);
 	pinMode(_gssck, OUTPUT);
@@ -31,6 +37,9 @@ void TLC5951::init(int gssin, int gssck, int gslat, int xblnk, int gsckrgb, int 
 	_gslat = gslat;
 	_xblnk = xblnk;
 	_gsckrgb = gsckrgb;
+	
+	_bufferCount = 0;
+	_debug = 0;
 	
 	pinMode(_gssin, OUTPUT);
 	pinMode(_gssck, OUTPUT);
@@ -60,50 +69,27 @@ void TLC5951::setAllGSData(int gsvalue) {
 }
 
 void TLC5951::updateGS() {
-	/*digitalWrite(_xblnk, LOW);
-	digitalWrite(_gslat, LOW);
+	_bufferCount = 0;
+	Serial.println("GS Begin");
 	
-	for(int a = 7; a >= 0; a--) {
-		for(int b = 2; b >= 0; b--) {
-			for(int c = 11; c >= 0; c--) {
-				digitalWrite(_gssin, bitRead(_gsData[a][b], c));
-				digitalWrite(_gssck, HIGH);
-				digitalWrite(_gssck, LOW);
+	digitalWrite(_xblnk, LOW); // Turn off the LED's since we're clocking in data
+	digitalWrite(_gslat, LOW); // GS Latch low, so it goes into the GS data latch
+	
+	for(int a = 7; a >= 0; a--) { // We have 8 LED's. Start at the last since thats how we clock data out
+		for(int b = 2; b >= 0; b--) { // Each with 3 colors
+			for(int c = 11; c >= 0; c--) { // each consiting of 12 bits
+				setBuffer((_gsData[a][b] & (1<<c)));
 			}
 		}
 	}
 	
-	digitalWrite(_gslat, HIGH);
-	digitalWrite(_gslat, LOW);
-	
-	digitalWrite(_xblnk, HIGH);*/
-	
-	byte buffer = 0;	
-	int index = 7;
-	
-	digitalWrite(_xblnk, LOW);
-	digitalWrite(_gslat, LOW);
-	
-	for(int a = 7; a >= 0; a--) {
-		for(int b = 2; b >= 0; b--) {
-			for(int c = 11; c >= 0; c--) {
-				if(index == -1)
-				{
-					SPI.transfer(buffer);
-					index = 7;
-				}
-				bitWrite(buffer, index, bitRead(_gsData[a][b], c));
-				index--;
-				if(a == 0 && b == 0 && c == 0)
-					SPI.transfer(buffer);		
-			}
-		}
-	}
+	delay(1);
 	
 	digitalWrite(_gslat, HIGH);
 	digitalWrite(_gslat, LOW);
 	
 	digitalWrite(_xblnk, HIGH);
+	Serial.println("GS END");
 }
 
 void TLC5951::setLED(unsigned int led, unsigned int red, unsigned int green, unsigned int blue) {
@@ -132,66 +118,46 @@ void TLC5951::setAllDCData(int dcvalue) {
 
 
 void TLC5951::updateControl() {
-	byte buffer = 0;
-	int index = 0;
-		
+	_bufferCount = 0;
+	
 	digitalWrite(_xblnk, LOW);
 	digitalWrite(_gslat, HIGH);	
 		
-	// dont care about these bits anyway
-	for(int i = 0; i < 11; i++)
-	{
-		SPI.transfer(buffer);
+	// 89 blank bits to get to correct position for DC/DC/FC (Disregard UD) data
+	digitalWrite(_gssin, LOW);
+	for(int a = 0; a < 89; a++) {
+		setBuffer(0);
 	}
-	bitWrite(buffer, 7, 0);
-	bitWrite(buffer, 6, 0);
 	
-	// Function data
-	for(int i = 6; i >= 1; i--) {
-		bitWrite(buffer, i-1, bitRead(_functionData, i));
+	// 7-bit Function Data
+	for(int a = 6; a >= 0; a--) {
+		setBuffer((_functionData & (1<<a)));
 	}
-	SPI.transfer(buffer);
-	bitWrite(buffer, 7, bitRead(_functionData, 0));
 	
 	// Blue Brightness
-	for(int i = 7; i >= 1; i--) {
-		bitWrite(buffer, i-1, bitRead(_brightBlue, i));
+	for(int a = 7; a >= 0; a--) {
+		setBuffer((_brightBlue & (1<<a)));
 	}
-	SPI.transfer(buffer);
-	bitWrite(buffer, 7, bitRead(_brightBlue, 0));
 	
 	// Green Brightness
-	for(int i = 7; i >= 1; i--) {
-		bitWrite(buffer, i-1, bitRead(_brightGreen, i));
+	for(int a = 7; a >= 0; a--) {
+		setBuffer((_brightGreen & (1<<a)));
 	}
-	SPI.transfer(buffer);
-	bitWrite(buffer, 7, bitRead(_brightGreen, 0));
 	
 	// Red Brightness
-	for(int i = 7; i >= 1; i--) {
-		bitWrite(buffer, i-1, bitRead(_brightRed, i));
+	for(int a = 7; a >= 0; a--) {
+		setBuffer((_brightRed & (1<<a)));
 	}
-	SPI.transfer(buffer);
-	bitWrite(buffer, 7, bitRead(_brightRed, 0));
 	
-	index = 6;
 	// Dot Correctness data
 	for(int a = 7; a >= 0; a--) {
 		for(int b = 2; b >= 0; b--) {
 			for(int c = 6; c >= 0; c--) {
-				if(index == -1)
-				{
-					SPI.transfer(buffer);
-					index = 7;
-				}
-				bitWrite(buffer, index, bitRead(_dcData[a][b], c));
-				index--;	
-				if(a == 0 && b == 0 && c == 0)
-					SPI.transfer(buffer);
-				
+				setBuffer(_dcData[a][b] & (1<<c));
 			}
 		}
 	}
+	
 	digitalWrite(_gslat, LOW);
 	delayMicroseconds(10);
 	
@@ -202,6 +168,22 @@ void TLC5951::updateControl() {
 }
 
 void TLC5951::update() {
-	updateGS();
 	updateControl();
+	updateGS();
+}
+
+void TLC5951::setBuffer(bool bit){
+	bitWrite(_buffer, _bufferCount, bit);
+	Serial.println(bit);
+	_bufferCount++;
+	if(_bufferCount == 8)
+	{
+		SPI.transfer(_buffer);
+		_debug++;
+		Serial.print("Debug: ");
+		Serial.print(_debug);
+		Serial.print("Buffer: ");
+		Serial.println(_buffer);
+		_bufferCount = 0;
+	}
 }
