@@ -27,7 +27,7 @@ void TLC5951::init(int gssin, int gssck, int gslat, int xblnk, int gsckrgb) {
 	analogWrite(_gsckrgb, 127);
 	
 	SPI.begin();
-    SPI.setBitOrder(MSBFIRST);
+    SPI.setBitOrder(LSBFIRST);
 	SPI.setClockDivider(SPI_CLOCK_DIV2);
 }
 
@@ -56,7 +56,7 @@ void TLC5951::init(int gssin, int gssck, int gslat, int xblnk, int gsckrgb, int 
 	setAllGSData(grayscale);
 	
 	SPI.begin();
-    SPI.setBitOrder(MSBFIRST);
+    SPI.setBitOrder(LSBFIRST);
 	SPI.setClockDivider(SPI_CLOCK_DIV2);
 }
 
